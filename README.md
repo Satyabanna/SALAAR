@@ -225,3 +225,4 @@ app. Add auth and Postgres the day a second team uses it.
    pairs are sent.
 7. Edit one idea's wording and watch its accepted edges turn amber for review.
 8. Paste a Slack snippet into *Import a team conversation* → same graph, new source.
+# SALAAR
