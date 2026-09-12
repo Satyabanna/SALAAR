@@ -1,0 +1,463 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IdeaGraph</title>
+<style>
+:root{
+  --ink:#0B0E14; --surface:#141926; --raise:#1A2030; --line:#232B3C;
+  --text:#E6E9EF; --muted:#8A93A8;
+  --signal:#4F7CFF; --pulse:#22D3A8; --friction:#F5A524; --stop:#FF5C5C;
+  --r:10px; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;height:100vh;display:grid;grid-template-rows:52px 1fr;background:var(--ink);color:var(--text);overflow:hidden}
+header{display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+.mark{display:flex;align-items:center;gap:8px;font-weight:650;letter-spacing:-.01em}
+.mark i{width:10px;height:10px;border-radius:50%;background:var(--pulse);box-shadow:0 0 0 4px rgba(34,211,168,.15),14px 6px 0 -2px var(--signal),-13px 5px 0 -3px var(--muted)}
+.tag{font:11px/1 var(--mono);color:var(--muted);border:1px solid var(--line);padding:5px 7px;border-radius:6px}
+.grow{flex:1}
+button{font:inherit;font-size:13px;color:var(--text);background:var(--raise);border:1px solid var(--line);padding:7px 12px;border-radius:8px;cursor:pointer}
+button:hover{border-color:#33405a}
+button.go{background:var(--signal);border-color:var(--signal);color:#fff;font-weight:600}
+button.alt{background:transparent;color:var(--pulse);border-color:#1d4a42}
+main{display:grid;grid-template-columns:1fr 340px;min-height:0}
+#stage{position:relative;overflow:hidden;cursor:grab;
+  background:radial-gradient(circle at 1px 1px,#1b2233 1px,transparent 0) 0 0/26px 26px,var(--ink)}
+#stage.pan{cursor:grabbing}
+#world{position:absolute;inset:0;transform-origin:0 0}
+#wires{position:absolute;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:1}
+#wires path{fill:none;stroke-width:1.6;pointer-events:stroke}
+.node{position:absolute;width:190px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);font-size:13px;line-height:1.4;cursor:grab;white-space:pre-wrap;word-break:break-word;z-index:2}
+.node:before{content:"";position:absolute;left:-4px;top:14px;width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.node.sel{border-color:var(--signal);box-shadow:0 0 0 3px rgba(79,124,255,.18)}
+.node.linked:before{background:var(--pulse)}
+.node.gravity-core:after{content:"";position:absolute;right:9px;top:9px;width:6px;height:6px;border-radius:50%;background:var(--pulse);box-shadow:0 0 0 3px rgba(34,211,168,.12)}
+.node[contenteditable=true]{cursor:text;outline:none;border-color:var(--pulse)}
+.cluster-halo{position:absolute;border:1px dashed rgba(34,211,168,.35);border-radius:50%;background:rgba(34,211,168,.035);pointer-events:none;z-index:0}
+.cluster-label{position:absolute;font:10px/1 var(--mono);color:var(--pulse);pointer-events:none;z-index:3;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{position:absolute;display:flex;gap:3px;transform:translate(-50%,-50%);z-index:3}
+.chip button{padding:1px 6px;font-size:11px;border-radius:6px;background:var(--raise)}
+.lbl{position:absolute;transform:translate(-50%,-50%);font:10px/1 var(--mono);color:var(--muted);z-index:3;
+  background:var(--ink);padding:2px 5px;border-radius:5px;border:1px solid var(--line);pointer-events:none;white-space:nowrap}
+aside{border-left:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+#out{flex:1;overflow:auto;padding:14px;font-size:13px;line-height:1.5}
+h3{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
+h3:first-child{margin-top:0}
+.card{background:var(--raise);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.card.warn{border-color:#4a3a14}.card.warn b{color:var(--friction)}
+ul{margin:0;padding-left:16px}li{margin:3px 0}
+.hint{color:var(--muted);font-size:12px}
+footer{border-top:1px solid var(--line);padding:10px;display:flex;gap:6px}
+input,textarea{flex:1;font:inherit;font-size:13px;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px}
+textarea{width:100%;height:90px;resize:vertical}
+details{padding:10px;border-top:1px solid var(--line)}summary{font-size:12px;color:var(--muted);cursor:pointer}
+.badge{font:10px/1 var(--mono);padding:3px 6px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+.badge.live{color:var(--pulse);border-color:#1d4a42}.badge.off{color:var(--friction);border-color:#4a3a14}
+</style>
+
+<header>
+  <span class="mark"><i></i> IdeaGraph</span>
+  <span class="tag" id="cid"></span>
+  <span class="grow"></span>
+  <span class="badge" id="state">ready</span>
+  <button id="seed">Seed demo</button>
+  <button class="alt" id="connect">Connect the dots</button>
+  <button class="alt" id="gravity" title="Suggest an embedding-driven layout; your current positions stay until you apply it">Arrange by gravity</button>
+  <button class="go" id="synth">Synthesize</button>
+</header>
+
+<main>
+  <div id="stage"><div id="world"><svg id="wires"></svg></div></div>
+  <aside>
+    <div id="out"><p class="hint">Double-click the canvas to drop an idea. Drag to move, click to select,
+      double-click a node to edit. <b>Connect the dots</b> types the edges; <b>Arrange by gravity</b> only suggests a layout. Every edge waits for your ✓, ✎, or ✗.</p></div>
+    <details><summary>Import a team conversation</summary>
+      <textarea id="tx" placeholder="Paste Slack/meeting transcript…"></textarea>
+      <button id="imp" style="margin-top:6px">Extract ideas →</button>
+    </details>
+    <footer><input id="q" placeholder="Ask the canvas…"><button id="ask">Ask</button></footer>
+  </aside>
+</main>
+
+<script>
+const GID = (location.hash.slice(1) || 'demo').replace(/[^A-Za-z0-9_-]/g,'') || 'demo';
+const $ = s => document.querySelector(s);
+const world = $('#world'), wires = $('#wires'), stage = $('#stage');
+let G = {nodes:[], edges:[], rejected:[], clusters:[]}, clusters = [], view = {x:0, y:0, z:1}, sel = new Set();
+let serverRevision = 0, saveTimer, saveChain = Promise.resolve();
+$('#cid').textContent = '#' + GID;
+
+const COLOR = {contradicts:'var(--friction)', duplicates:'var(--stop)',
+  depends_on:'var(--signal)', causes:'var(--signal)', solves:'var(--signal)', implements:'var(--signal)',
+  expands:'var(--pulse)', specializes:'var(--pulse)', can_combine_with:'var(--pulse)', relates_to:'#4a5468'};
+
+const api = async (m, p, b) => {
+  const response = await fetch(p, {method:m, headers:{'Content-Type':'application/json'}, body: b && JSON.stringify(b)});
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.error) throw new Error(data.error || `Request failed (${response.status})`);
+  return data;
+};
+
+const now = () => new Date().toISOString();
+const textOf = n => String(n.content ?? n.text ?? '');
+function normaliseGraph(graph){
+  graph = graph && typeof graph === 'object' ? graph : {nodes:[],edges:[],rejected:[]};
+  graph.nodes ||= []; graph.edges ||= []; graph.rejected ||= [];
+  graph.revision = Number.isInteger(+graph.revision) ? +graph.revision : 0;
+  for (const n of graph.nodes){
+    n.text = textOf(n); n.content ??= n.text;
+    n.x = Number.isFinite(+n.x) ? +n.x : +(n.position && n.position.x) || 0;
+    n.y = Number.isFinite(+n.y) ? +n.y : +(n.position && n.position.y) || 0;
+    n.position = {x:n.x, y:n.y}; n.source ||= 'canvas'; n.timestamp ||= now(); n.status ||= 'raw';
+  }
+  return graph;
+}
+function makeNode(text, x, y, source='canvas'){
+  return {id:'u' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), text, content:text,
+    x, y, position:{x,y}, source, timestamp:now(), status:'raw'};
+}
+function invalidateAnalysis(){ clusters = []; G.clusters = []; }
+function invalidateNodeRelations(id){
+  G.edges = G.edges.filter(edge => {
+    if (edge.src !== id && edge.dst !== id) return true;
+    if ((edge.state || 'accepted') === 'accepted'){
+      // A human-confirmed relationship is a user decision, not disposable AI
+      // output. Keep it visible for an explicit confirmation after the idea
+      // wording changes; the server excludes it from COG mass until reviewed.
+      edge.needs_review = true;
+      edge.review_reason = 'An endpoint idea changed';
+      return true;
+    }
+    return false; // stale pending AI proposal
+  });
+  G.rejected = G.rejected.filter(entry => {
+    const pair = Array.isArray(entry) ? entry : (entry && (entry.pair || [entry.src, entry.dst]));
+    return !Array.isArray(pair) || !pair.includes(id);
+  });
+}
+
+function persist(){
+  const snapshot = JSON.parse(JSON.stringify(G));
+  saveChain = saveChain.catch(() => {}).then(async () => {
+    snapshot.revision = serverRevision;
+    const saved = await api('PUT', '/api/graph/' + GID, snapshot);
+    serverRevision = Math.max(serverRevision, +saved.revision || 0);
+    return saved;
+  }).catch(() => null);
+  return saveChain;
+}
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveTimer = null; persist(); }, 600);
+}
+async function flushSave(){
+  if (saveTimer){ clearTimeout(saveTimer); saveTimer = null; persist(); }
+  await saveChain;
+}
+const busy = (s, cls='') => { $('#state').className = 'badge ' + cls; $('#state').textContent = s; };
+
+/* ---- view ---- */
+function applyView(){ world.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.z})`; }
+const toWorld = e => ({x:(e.clientX - stage.getBoundingClientRect().left - view.x)/view.z,
+                       y:(e.clientY - stage.getBoundingClientRect().top  - view.y)/view.z});
+
+/* ---- render ---- */
+function geometry(cluster){
+  if (cluster.spatial_centre) return cluster.spatial_centre;
+  const members = cluster.node_ids.map(id => G.nodes.find(n => n.id === id)).filter(Boolean);
+  if (!members.length) return null;
+  const x = members.reduce((sum, n) => sum + n.x + 95, 0) / members.length;
+  const y = members.reduce((sum, n) => sum + n.y + 22, 0) / members.length;
+  const radius = Math.max(140, ...members.map(n => Math.hypot(n.x + 95 - x, n.y + 22 - y) + 110));
+  return {x,y,radius};
+}
+function drawClusters(){
+  for (const cluster of clusters){
+    if (!cluster.node_ids || cluster.node_ids.length < 2) continue;
+    const c = geometry(cluster); if (!c) continue;
+    const halo = document.createElement('div'); halo.className = 'cluster-halo';
+    halo.style.left = (c.x - c.radius) + 'px'; halo.style.top = (c.y - c.radius) + 'px';
+    halo.style.width = halo.style.height = (c.radius * 2) + 'px'; world.appendChild(halo);
+    const label = document.createElement('div'); label.className = 'cluster-label';
+    label.style.left = (c.x - c.radius + 12) + 'px'; label.style.top = (c.y - c.radius + 10) + 'px';
+    label.textContent = `COG · ${cluster.label || 'cluster'} · ${Math.round((cluster.cohesion || 0) * 100)}%`;
+    world.appendChild(label);
+  }
+}
+function draw(){
+  [...world.children].forEach(c => c.id !== 'wires' && c.remove());
+  const linked = new Set(G.edges.flatMap(e => [e.src, e.dst]));
+  const cores = new Set(clusters.map(c => c.centre_of_gravity && c.centre_of_gravity.core_node_id));
+  drawClusters();
+  for (const n of G.nodes){
+    const d = document.createElement('div');
+    d.className = 'node' + (sel.has(n.id) ? ' sel' : '') + (linked.has(n.id) ? ' linked' : '') + (cores.has(n.id) ? ' gravity-core' : '');
+    d.style.left = n.x + 'px'; d.style.top = n.y + 'px'; d.textContent = textOf(n); d.dataset.id = n.id;
+    if (Number.isFinite(+n.gravity_pull)) d.title = `embedding pull ${(+n.gravity_pull).toFixed(2)} · ${n.status}`;
+    world.appendChild(d);
+  }
+  drawWires();
+}
+
+const at = id => { const n = G.nodes.find(n => n.id === id); return n && {x:n.x + 95, y:n.y + 22}; };
+
+function drawWires(){
+  wires.innerHTML = '';
+  [...world.querySelectorAll('.chip,.lbl')].forEach(e => e.remove());
+  G.edges.forEach((e, i) => {
+    const a = at(e.src), b = at(e.dst); if (!a || !b) return;
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    const mx = (a.x + b.x)/2, my = (a.y + b.y)/2;
+    p.setAttribute('d', `M${a.x} ${a.y} Q ${mx} ${my - 26} ${b.x} ${b.y}`);
+    p.setAttribute('stroke', COLOR[e.type] || COLOR.relates_to);
+    p.setAttribute('opacity', 0.35 + 0.65 * (e.conf || .5));
+    if (e.state === 'pending' || e.needs_review) p.setAttribute('stroke-dasharray','5 4');
+    if (e.needs_review) p.setAttribute('stroke', 'var(--friction)');
+    const tip = document.createElementNS('http://www.w3.org/2000/svg','title');
+    tip.textContent = `${e.type} · ${(e.conf*100)|0}% — ${e.why}${e.needs_review ? ' (review after idea edit)' : ''}`;
+    p.appendChild(tip); wires.appendChild(p);
+
+    const l = document.createElement('div');
+    l.className = 'lbl'; l.style.left = mx + 'px'; l.style.top = (my - 13) + 'px';
+    l.textContent = e.needs_review ? `${e.type} · review` : e.type;
+    l.style.color = e.needs_review ? 'var(--friction)' : (COLOR[e.type] || 'var(--muted)');
+    world.appendChild(l);
+
+    if (e.state === 'pending' || e.needs_review){
+      const c = document.createElement('div');
+      c.className = 'chip'; c.style.left = mx + 'px'; c.style.top = (my + 10) + 'px';
+      const choice = (key, label, title) => {
+        const button = document.createElement('button'); button.dataset[key] = i; button.textContent = label; button.title = title;
+        return button;
+      };
+      c.append(choice('ok', '✓', e.needs_review ? 'Confirm this relationship after the idea edit' : (e.why || 'Accept this suggestion')));
+      c.append(choice('edit', '✎', e.needs_review ? 'Review, edit, and confirm this relationship' : 'Edit and accept this suggestion'));
+      c.append(choice('no', '✗', e.needs_review ? 'Reject this relationship after the idea edit' : 'Reject this suggestion'));
+      world.appendChild(c);
+    }
+  });
+}
+
+/* ---- interactions ---- */
+stage.addEventListener('dblclick', e => {
+  if (e.target.closest('.node')) return;
+  const p = toWorld(e);
+  const n = makeNode('', p.x - 95, p.y - 22);
+  G.nodes.push(n); invalidateAnalysis(); draw(); edit(world.querySelector(`[data-id="${n.id}"]`));
+});
+
+function edit(el){
+  el.contentEditable = 'true'; el.focus();
+  el.onblur = () => {
+    el.contentEditable = 'false';
+    const n = G.nodes.find(n => n.id === el.dataset.id);
+    const before = textOf(n);
+    n.text = el.textContent.trim();
+    n.content = n.text; n.status = 'raw'; n.timestamp = now();
+    delete n.semantic_representation; delete n.semantic;
+    if (n.text !== before) invalidateNodeRelations(n.id);
+    if (!n.text) G.nodes = G.nodes.filter(x => x !== n);
+    invalidateAnalysis();
+    draw(); save();
+  };
+  el.onkeydown = ev => { if (ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); el.blur(); } };
+}
+
+stage.addEventListener('pointerdown', e => {
+  const ok = e.target.closest('[data-ok]'), no = e.target.closest('[data-no]'), change = e.target.closest('[data-edit]');
+  if (ok || no){
+    // Prevent a fast double-click from sending two decisions before the first
+    // response redraws the edge list.
+    (ok || no).closest('.chip').querySelectorAll('button').forEach(button => { button.disabled = true; });
+    verdict(+(ok||no).dataset[ok ? 'ok' : 'no'], ok ? 'accepted' : 'rejected'); return;
+  }
+  if (change){ editEdge(+change.dataset.edit); return; }
+  const el = e.target.closest('.node');
+  if (el && el.contentEditable === 'true') return;
+  const start = {x:e.clientX, y:e.clientY}, n = el && G.nodes.find(n => n.id === el.dataset.id);
+  const base = n ? {x:n.x, y:n.y} : {x:view.x, y:view.y};
+  let moved = false;
+  if (!n) stage.classList.add('pan');
+  const move = ev => {
+    const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    if (n){ n.x = base.x + dx/view.z; n.y = base.y + dy/view.z; n.position = {x:n.x,y:n.y};
+            el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; drawWires(); }
+    else { view.x = base.x + dx; view.y = base.y + dy; applyView(); }
+  };
+  const up = () => {
+    removeEventListener('pointermove', move); removeEventListener('pointerup', up);
+    stage.classList.remove('pan');
+    if (n && !moved){ sel.has(n.id) ? sel.delete(n.id) : sel.add(n.id); draw(); }
+    else if (n){ save(); }
+    else if (!moved){ sel.clear(); draw(); }
+  };
+  addEventListener('pointermove', move); addEventListener('pointerup', up);
+});
+
+stage.addEventListener('dblclick', e => { const el = e.target.closest('.node'); if (el) edit(el); });
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const k = Math.exp(-e.deltaY * 0.0015), p = toWorld(e);
+  view.z = Math.min(2.5, Math.max(0.3, view.z * k));
+  view.x -= (p.x * view.z + view.x) - (e.clientX - stage.getBoundingClientRect().left);
+  view.y -= (p.y * view.z + view.y) - (e.clientY - stage.getBoundingClientRect().top);
+  applyView();
+}, {passive:false});
+
+addEventListener('keydown', e => {
+  if ((e.key === 'Backspace' || e.key === 'Delete') && sel.size && !document.querySelector('[contenteditable=true]')){
+    G.nodes = G.nodes.filter(n => !sel.has(n.id));
+    G.edges = G.edges.filter(x => !sel.has(x.src) && !sel.has(x.dst));
+    sel.clear(); invalidateAnalysis(); draw(); save();
+  }
+});
+
+/* ---- agent ---- */
+function takeGraph(result){
+  const hasGraph = !!(result && (result.graph || Array.isArray(result.nodes)));
+  if (result && result.graph) G = normaliseGraph(result.graph);
+  else if (result && Array.isArray(result.nodes)) G = normaliseGraph(result);
+  serverRevision = Math.max(serverRevision, +(G && G.revision) || +(result && result.revision) || 0);
+  if (result && Array.isArray(result.clusters)) { clusters = result.clusters; G.clusters = clusters; }
+  else if (hasGraph) clusters = G.clusters || [];
+}
+
+async function refreshClusters(){
+  try {
+    await flushSave();
+    const r = await api('POST', '/api/clusters/' + GID, {});
+    takeGraph(r); draw(); return r;
+  } catch (_) { return null; }
+}
+
+async function verdict(i, state){
+  busy(state === 'accepted' ? 'accepting…' : 'rejecting…');
+  try {
+    await flushSave();
+    const edge = G.edges[i];
+    takeGraph(await api('POST', '/api/edge/' + GID, {index:i, edge_id:edge && edge.id, state})); draw();
+    busy(state === 'accepted' ? 'edge accepted' : 'edge rejected', 'live');
+  } catch (_) { busy('edge update failed', 'off'); }
+}
+
+async function editEdge(i){
+  const edge = G.edges[i]; if (!edge) return;
+  const allowed = Object.keys(COLOR);
+  let type = prompt(`Relationship type (${allowed.join(', ')})`, edge.type);
+  if (type === null) return;
+  type = type.trim();
+  if (!allowed.includes(type)){ alert('Use one of the listed relationship types.'); return; }
+  const why = prompt('Why does this relationship hold?', edge.why || '');
+  if (why === null || !why.trim()) return;
+  busy('updating edge…');
+  try {
+    await flushSave();
+    takeGraph(await api('POST', '/api/edge/' + GID,
+      {index:i, edge_id:edge.id, state:'accepted', type, why:why.trim(), conf:edge.conf}));
+    draw(); busy('edge edited', 'live');
+  } catch (_) { busy('edge update failed', 'off'); }
+}
+
+function animatePositions(points){
+  const targets = new Map(points.map(point => [point.id, point]));
+  const initial = new Map(G.nodes.filter(node => targets.has(node.id)).map(node => [node.id, {x:node.x,y:node.y}]));
+  const start = performance.now(), duration = 420;
+  const frame = time => {
+    const progress = Math.min(1, (time - start) / duration), eased = 1 - Math.pow(1 - progress, 3);
+    for (const node of G.nodes){
+      const from = initial.get(node.id), to = targets.get(node.id); if (!from || !to) continue;
+      node.x = from.x + (to.x - from.x) * eased; node.y = from.y + (to.y - from.y) * eased;
+      node.position = {x:node.x, y:node.y};
+    }
+    draw();
+    if (progress < 1) requestAnimationFrame(frame); else save();
+  };
+  requestAnimationFrame(frame);
+}
+
+$('#gravity').onclick = async () => {
+  if (G.nodes.length < 2) return;
+  busy('calculating gravity…');
+  try {
+    await flushSave();
+    const ids = sel.size > 1 ? [...sel] : [];
+    const r = await api('POST', '/api/gravity/' + GID, {ids});
+    takeGraph(r);
+    if (Array.isArray(r.layout_clusters)) clusters = r.layout_clusters;
+    animatePositions(r.positions || []);
+    busy(`gravity arranged · ${r.embedding_model || 'embeddings'}`, 'live');
+  } catch (_) { busy('gravity unavailable', 'off'); }
+};
+
+$('#connect').onclick = async () => {
+  busy('connecting…');
+  try {
+    await flushSave();
+    const r = await api('POST', '/api/connect/' + GID, {});
+    takeGraph(r); draw();
+    busy(r.mode === 'fallback' ? 'offline mode · ' + r.new + ' edges' : r.new + ' new edges',
+         r.mode === 'fallback' ? 'off' : 'live');
+  } catch (_) { busy('connection failed', 'off'); }
+};
+
+const esc = s => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+const list = a => a && a.length ? `<ul>${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class=hint>none found</p>';
+
+$('#synth').onclick = async () => {
+  busy('synthesizing…');
+  try {
+    await flushSave();
+    const r = await api('POST', '/api/synthesize/' + GID, {ids:[...sel]});
+    takeGraph(r);
+    $('#out').innerHTML = `
+      <h3>Core concept${sel.size ? ' · ' + sel.size + ' selected' : ' · whole canvas'}</h3>
+      <div class="card"><b>${esc(r.core)}</b></div>
+      <h3>What's missing</h3>${list(r.gaps)}
+      <h3>Contradictions</h3>${r.contradictions && r.contradictions.length
+        ? r.contradictions.map(c => `<div class="card warn"><b>⚠</b> ${esc(c)}</div>`).join('') : '<p class=hint>none found</p>'}
+      <h3>Refined concept</h3>
+      <div class="card"><b>Problem</b><br>${esc(r.refined && r.refined.problem)}</div>
+      <div class="card"><b>Solution</b><br>${esc(r.refined && r.refined.solution)}</div>
+      <div class="card"><b>MVP</b><br>${esc(r.refined && r.refined.mvp)}</div>
+      <h3>Next action</h3><div class="card">${esc(r.next_action)}</div>`;
+    busy('ready', 'live');
+  } catch (_) { busy('synthesis failed', 'off'); }
+};
+
+$('#ask').onclick = async () => {
+  const q = $('#q').value.trim(); if (!q) return;
+  $('#q').value = ''; busy('thinking…');
+  try {
+    await flushSave();
+    const r = await api('POST', '/api/chat/' + GID, {q});
+    $('#out').innerHTML = `<h3>${esc(q)}</h3><div class="card">${esc(r.answer)}</div>` + $('#out').innerHTML;
+    busy('ready', 'live');
+  } catch (_) { busy('chat failed', 'off'); }
+};
+$('#q').onkeydown = e => e.key === 'Enter' && $('#ask').click();
+
+$('#imp').onclick = async () => {
+  const transcript = $('#tx').value.trim(); if (!transcript) return;
+  busy('extracting…');
+  try {
+    await flushSave();
+    takeGraph(await api('POST', '/api/extract/' + GID, {transcript})); $('#tx').value = ''; draw();
+    busy('ideas added', 'live');
+  } catch (_) { busy('extraction failed', 'off'); }
+};
+
+$('#seed').onclick = () => {
+  const seed = ['AI for hospitals','Patient waiting time is the real pain','Predict bottlenecks before they form',
+    'The agent should investigate why, not just report','Could live in Slack where the team already talks',
+    'Nurses will not open another dashboard','Start with one ward, not the whole hospital'];
+  G = {nodes:seed.map((text, i) => ({...makeNode(text, 60 + (i % 3) * 230, 60 + Math.floor(i / 3) * 150), id:'s' + i})),
+       edges:[], rejected:[], clusters:[]};
+  clusters = []; sel.clear(); draw(); save();
+};
+
+api('GET', '/api/graph/' + GID).then(g => { G = normaliseGraph(g); serverRevision = G.revision; clusters = G.clusters || []; applyView(); draw(); refreshClusters(); })
+  .catch(() => busy('canvas unavailable', 'off'));
+</script>
