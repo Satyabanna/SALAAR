@@ -1,10 +1,10 @@
-# IdeaGraph — Brand Guidelines v1.0
+# SALAAR — Brand Guidelines v1.0
 
 ## Quick reference
 
 | | |
 |---|---|
-| **Name** | IdeaGraph |
+| **Name** | SALAAR |
 | **Line** | You think. You drop the ideas. The agent connects the dots. |
 | **Wedge** | Every edge is **typed, explained, and approved by you.** Other AI canvases group ideas; we commit to *how* two ideas relate, quote the words that justify it, and let you reject it. |
 | **Category** | Idea intelligence — not a mind map, not a notes app |

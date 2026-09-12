@@ -1,4 +1,4 @@
-"""IdeaGraph — idea canvas that types and explains the edges between ideas.
+"""SALAAR — idea canvas that types and explains the edges between ideas.
 
 System shape (one process, no services):
 
@@ -29,7 +29,7 @@ from pathlib import Path
 
 # Any OpenAI-compatible endpoint. Defaults to NVIDIA NIM / Nemotron.
 BASE_URL = os.getenv("BASE_URL", "https://integrate.api.nvidia.com/v1")
-MODEL = os.getenv("IDEAGRAPH_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1.5")
+MODEL = os.getenv("SALAAR_MODEL", "nvidia/llama-3.3-nemotron-super-49b-v1.5")
 KEY_VAR = os.getenv("API_KEY_VAR", "NVIDIA_API_KEY")
 API_KEY = os.getenv(KEY_VAR) or os.getenv("OPENAI_API_KEY") or ""
 DATA = Path(os.getenv("DATA_DIR", "data"))
@@ -38,10 +38,10 @@ TOP_K = max(1, int(os.getenv("TOP_K", "4")))    # top semantic neighbours per no
 MAX_PAIRS = max(0, int(os.getenv("MAX_PAIRS", "60")))  # global candidate safety cap; 0 = no cap
 
 # Embeddings deliberately have their own configuration: a chat model is not
-# necessarily an embedding model. Set IDEAGRAPH_EMBEDDING_MODEL to use any
+# necessarily an embedding model. Set SALAAR_EMBEDDING_MODEL to use any
 # OpenAI-compatible /embeddings endpoint. With no setting, the app uses the
 # deterministic local semantic embedder below, so Tier 0 still works offline.
-REMOTE_EMBEDDING_MODEL = os.getenv("IDEAGRAPH_EMBEDDING_MODEL", "").strip()
+REMOTE_EMBEDDING_MODEL = os.getenv("SALAAR_EMBEDDING_MODEL", "").strip()
 EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", BASE_URL)
 EMBEDDING_KEY_VAR = os.getenv("EMBEDDING_API_KEY_VAR", KEY_VAR)
 EMBEDDING_API_KEY = os.getenv(EMBEDDING_KEY_VAR) or API_KEY
@@ -398,7 +398,7 @@ def ensure_embeddings(nodes):
         except Exception as exc:
             # A misconfigured embedding endpoint must not turn a canvas action into
             # a spinner. Disable it for this process and consistently recache local.
-            print(f"[ideagraph] embedding fallback: {exc!r}")
+            print(f"[salaar] embedding fallback: {exc!r}")
             REMOTE_EMBEDDINGS_DISABLED = True
             return ensure_embeddings(nodes)
 
@@ -965,7 +965,7 @@ def type_pairs_batched(pairs, size=None):
             raise ValueError("relationship batch did not contain valid edges")
         return cleaned, "llm"
     except Exception as exc:
-        print(f"[ideagraph] relationship batch fell back: {exc!r}")
+        print(f"[salaar] relationship batch fell back: {exc!r}")
         return _validated_typed_edges(fallback_pairs(pairs), len(pairs)), "fallback"
 
 
@@ -1129,7 +1129,7 @@ matter. gaps and contradictions: at most 3 each, one sentence each, empty if non
             SYNTH_SCHEMA)
         return _attach_synthesis(g, ids, result)
     except Exception as exc:
-        print(f"[ideagraph] synth fallback: {exc!r}")
+        print(f"[salaar] synth fallback: {exc!r}")
         texts = [_node_text(n) for n in g["nodes"] if ids is None or n["id"] in ids]
         top = [t for t, _ in Counter(t for x in texts for t in _terms(x)).most_common(4)]
         result = {"core": "Offline summary — recurring themes: " + ", ".join(top),
@@ -1155,7 +1155,7 @@ def extract(transcript):
             "logistics and agreement noise.\n\n" + transcript[:8000], NODES_SCHEMA)["ideas"]
         return [str(idea).strip() for idea in ideas if str(idea).strip()][:12]
     except Exception as exc:
-        print(f"[ideagraph] extract fallback: {exc!r}")
+        print(f"[salaar] extract fallback: {exc!r}")
         return [s.strip() for s in re.split(r"[.\n]", transcript) if len(s.strip()) > 25][:8]
 
 
@@ -1172,7 +1172,7 @@ Question: {question}
 Answer in under 80 words, referring to specific ideas on the canvas. Say plainly if
 the canvas does not contain the answer.""")
     except Exception as exc:
-        print(f"[ideagraph] chat fallback: {exc!r}")
+        print(f"[salaar] chat fallback: {exc!r}")
         return "Model unreachable — canvas still saved. Try again in a moment."
 
 
@@ -1381,7 +1381,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send({"graph": commit(gid, g), "clusters": clusters})
             return self._send({"error": "not found"}, 404)
         except Exception as exc:
-            print(f"[ideagraph] {action} failed: {exc!r}")
+            print(f"[salaar] {action} failed: {exc!r}")
             return self._send({"error": str(exc)}, 500)
 
     def log_message(self, *a):
@@ -1390,5 +1390,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))
-    print(f"IdeaGraph on http://localhost:{port}  (model {MODEL})")
+    print(f"SALAAR on http://localhost:{port}  (model {MODEL})")
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

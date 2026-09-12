@@ -1,4 +1,4 @@
-# IdeaGraph
+# SALAAR
 
 > You think. You drop the ideas. The agent connects the dots.
 
@@ -9,7 +9,7 @@ An idea canvas where the edges are the product. Every connection the agent propo
 ```bash
 export OLLAMA_API=...                      # any OpenAI-compatible key
 export BASE_URL=https://ollama.com/v1
-export IDEAGRAPH_MODEL=gpt-oss:120b
+export SALAAR_MODEL=gpt-oss:120b
 export API_KEY_VAR=OLLAMA_API
 export LLM_TIMEOUT=90                      # see "Read this before you demo"
 python3 app.py                             # http://localhost:8000
@@ -36,7 +36,7 @@ cut at 5s, the exception is caught, and the canvas silently serves the scripted 
 | | |
 |---|---|
 | Local | `python3 app.py` — stdlib HTTP server, no framework, no dependencies |
-| Docker | `docker build -t ideagraph . && docker run -p 8000:8000 -e OLLAMA_API=$OLLAMA_API -v $PWD/data:/data ideagraph` |
+| Docker | `docker build -t salaar . && docker run -p 8000:8000 -e OLLAMA_API=$OLLAMA_API -v $PWD/data:/data salaar` |
 | Render / Fly / Cloud Run | Dockerfile as-is; honours `$PORT`. Mount a volume at `/data` to keep canvases. |
 | Self-check | `python3 test_app.py` — no network, no key, ~0.07s |
 
@@ -55,7 +55,7 @@ With no configuration the app uses a **local deterministic embedder**
 eight hand-written semantic-family axes (healthcare, operations, prediction, agent,
 collaboration, product, research, sustainability). It is genuinely modest — but it is a
 fixed-size embedding, it needs no key, and it makes Tier 0 work offline. Set
-`IDEAGRAPH_EMBEDDING_MODEL` to use any OpenAI-compatible `/embeddings` endpoint instead; if that
+`SALAAR_EMBEDDING_MODEL` to use any OpenAI-compatible `/embeddings` endpoint instead; if that
 endpoint misbehaves the app disables it for the process and recaches locally rather than
 turning a canvas click into a spinner.
 
@@ -149,10 +149,10 @@ Canvas ids are validated against `[A-Za-z0-9_-]{1,64}`, so no path traversal (ve
 | Variable | Default | Notes |
 |---|---|---|
 | `BASE_URL` | NVIDIA NIM | Any OpenAI-compatible `/chat/completions` |
-| `IDEAGRAPH_MODEL` | `nvidia/llama-3.3-nemotron-super-49b-v1.5` | `detailed thinking off` is sent automatically for Nemotron |
+| `SALAAR_MODEL` | `nvidia/llama-3.3-nemotron-super-49b-v1.5` | `detailed thinking off` is sent automatically for Nemotron |
 | `API_KEY_VAR` | `NVIDIA_API_KEY` | Name of the variable holding the key, not the key |
 | `LLM_TIMEOUT` | `5` | **Too low. See above.** |
-| `IDEAGRAPH_EMBEDDING_MODEL` | unset | Unset = local deterministic embedder |
+| `SALAAR_EMBEDDING_MODEL` | unset | Unset = local deterministic embedder |
 | `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY_VAR` / `EMBEDDING_TIMEOUT` | inherit chat config | A chat model is not an embedding model |
 | `EMBEDDING_DIMENSIONS` | `192` | Local embedder width |
 | `TOP_K` / `MAX_PAIRS` | `4` / `60` | Neighbours per node; hard cap on pairs per call |
@@ -225,4 +225,3 @@ app. Add auth and Postgres the day a second team uses it.
    pairs are sent.
 7. Edit one idea's wording and watch its accepted edges turn amber for review.
 8. Paste a Slack snippet into *Import a team conversation* → same graph, new source.
-# SALAAR
